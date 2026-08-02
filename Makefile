@@ -1,7 +1,9 @@
 CC = gcc
 
 CFLAGS = -Wall -Wextra -g \
-          -Wsign-conversion -Wconversion -lcrypto
+          -Wsign-conversion -Wconversion
+
+LDLIBS = -lcrypto -pthread
 
 SANITIZERS = -fsanitize=address,undefined
 
@@ -28,7 +30,7 @@ $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)/$(QUEUE_SRC_DIR)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(SANITIZERS) $^ -o $@ -pthread
+	$(CC) $(CFLAGS) $(INCLUDES) $(SANITIZERS) demo/main.c $^ $(LDLIBS) -o $@
 
 $(OBJ_DIR)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
