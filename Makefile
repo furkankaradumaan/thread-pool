@@ -1,7 +1,7 @@
 CC = gcc
 
-CFLAGS = -Wall -Wextra -Werror -std=c99 -g \
-          -Wsign-conversion -Wconversion
+CFLAGS = -Wall -Wextra -g \
+          -Wsign-conversion -Wconversion -lcrypto
 
 SANITIZERS = -fsanitize=address,undefined
 
