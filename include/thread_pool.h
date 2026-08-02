@@ -16,7 +16,9 @@ typedef enum thread_pool_return_code {
         THREAD_POOL_OK,
         THREAD_POOL_MEMORY_ERROR,
         THREAD_POOL_PTHREAD_ERROR,
-        THREAD_POOL_NULL_ARGUMENT
+        THREAD_POOL_NULL_ARGUMENT,
+        THREAD_POOL_QUEUE_ERROR,
+        THREAD_POOL_SHUTDOWNED
 } thread_pool_return_code_t;
 
 /*
