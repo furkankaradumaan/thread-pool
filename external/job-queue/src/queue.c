@@ -166,7 +166,6 @@ job_queue_return_code_t job_queue_push(job_queue_t *queue,
         pthread_mutex_lock(&queue->mutex);
 
         while (job_queue_full(queue)) {
-                printf("[Producer %lu] waiting for adding jobs...\n", pthread_self());
                 pthread_cond_wait(&queue->cond_full, &queue->mutex);
         }
         
@@ -195,7 +194,6 @@ job_queue_return_code_t job_queue_pop(job_queue_t *queue, job_t **job) {
         pthread_mutex_lock(&queue->mutex);
 
         while (job_queue_empty(queue)) {
-                printf("[Worker %lu] waiting for getting jobs...\n", pthread_self());
                 pthread_cond_wait(&queue->cond_empty, &queue->mutex);
         }
 
