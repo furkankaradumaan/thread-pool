@@ -15,7 +15,10 @@ struct thread_pool {
 
 static void *worker(void *args) {
         thread_pool_t *pool = (thread_pool_t *)args;
-        
+        if (pool == NULL) {
+                return NULL;
+        }
+
         while (true) {
                 job_t *j = NULL;
                 job_queue_pop(pool->queue, &j);
@@ -36,6 +39,9 @@ thread_pool_return_code_t thread_pool_init(thread_pool_t **pool,
                                            size_t workers,
                                            size_t queue_cap) {
         if (pool == NULL) return THREAD_POOL_NULL_ARGUMENT;
+        if (workers == 0 || queue_cap == 0) {
+                return THREAD_POOL_INVALID_ARGUMENT;
+        }
 
         *pool = malloc(sizeof(thread_pool_t));
         if (*pool == NULL) {
@@ -48,13 +54,17 @@ thread_pool_return_code_t thread_pool_init(thread_pool_t **pool,
                 return THREAD_POOL_MEMORY_ERROR;
         }
         
-        pthread_mutex_init(&(*pool)->mutex, NULL);
-
-        job_queue_init(&(*pool)->queue, queue_cap);
-        if ((*pool)->queue == NULL) {
+        if (pthread_mutex_init(&(*pool)->mutex, NULL) != 0) {
                 free((*pool)->workers);
                 free(*pool);
-                return THREAD_POOL_MEMORY_ERROR;
+                return THREAD_POOL_PTHREAD_ERROR;
+        }
+
+        if (job_queue_init(&(*pool)->queue, queue_cap) != QUEUE_OK) {
+                pthread_mutex_destroy(&(*pool)->mutex);
+                free((*pool)->workers);
+                free(*pool);
+                return THREAD_POOL_QUEUE_ERROR;
         }
 
         (*pool)->shutdown = false;
@@ -62,7 +72,22 @@ thread_pool_return_code_t thread_pool_init(thread_pool_t **pool,
         
         // initialize threads
         for (size_t w = 0; w < workers; w++) {
-                pthread_create(&(*pool)->workers[w], NULL, worker, *pool);
+                if (pthread_create(&(*pool)->workers[w], NULL, worker, *pool) != 0) {
+                        (*pool)->shutdown = true;
+                        for (size_t i = 0; i < w; i++) {
+                                job_queue_push((*pool)->queue, NULL);
+                        }
+
+                        for (size_t i = 0; i < w; i++) {
+                                pthread_join((*pool)->workers[i], NULL);
+                        }
+                        
+                        job_queue_destroy(&(*pool)->queue);
+                        pthread_mutex_destroy(&(*pool)->mutex);
+                        free((*pool)->workers);
+                        free(*pool);
+                        return THREAD_POOL_PTHREAD_ERROR;
+                }
         }
 
         return THREAD_POOL_OK;
@@ -72,12 +97,12 @@ thread_pool_return_code_t thread_pool_init(thread_pool_t **pool,
 thread_pool_return_code_t thread_pool_submit(thread_pool_t *pool,
                                              job_func fn,
                                              void *args) {
-        if (pool == NULL) {
+        if (pool == NULL || fn == NULL) {
                 return THREAD_POOL_NULL_ARGUMENT;
         }
 
         pthread_mutex_lock(&pool->mutex);
-        
+
         if (pool->shutdown) {
                 pthread_mutex_unlock(&pool->mutex);
                 return THREAD_POOL_SHUTDOWNED;
@@ -85,15 +110,20 @@ thread_pool_return_code_t thread_pool_submit(thread_pool_t *pool,
 
 
         job_t *j = NULL;
-        if (job_init(&j, fn, args) == QUEUE_OK) {
-                job_queue_push(pool->queue, j);
+        if (job_init(&j, fn, args) != QUEUE_OK) {
                 pthread_mutex_unlock(&pool->mutex);
-                return THREAD_POOL_OK;
+
+                return THREAD_POOL_QUEUE_ERROR;
         }
 
+        if (job_queue_push(pool->queue, j) != QUEUE_OK) {
+                job_destroy(&j);
+                pthread_mutex_unlock(&pool->mutex);
+                return THREAD_POOL_QUEUE_ERROR;
+        }
         pthread_mutex_unlock(&pool->mutex);
-        
-        return THREAD_POOL_QUEUE_ERROR;
+       
+        return THREAD_POOL_OK;
 }
 
 
